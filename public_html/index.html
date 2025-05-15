@@ -1,0 +1,248 @@
+<!doctype html> 
+<html lang="en"> 
+    <head> 
+        <link rel="icon" type="image/png" href="favicon.png" />
+        <meta charset="UTF-8" />
+        <title>The Love Battle</title>
+        <script type="text/javascript" src="controleur/lib/phaser.js"></script>
+        <script type="text/javascript" src="controleur/lib/healthMeter.js"></script>
+        <script type="text/javascript" src="controleur/lib/underscore.js"></script>
+        <script type="text/javascript" src="controleur/lib/lodash.js"></script>
+
+        <script type="text/javascript" src="controleur/player.js"></script>
+        <script type="text/javascript" src="controleur/control.js"></script>
+        <script type="text/javascript" src="controleur/solide.js"></script>
+        <script type="text/javascript" src="controleur/weapon.js"></script>
+
+        <style type="text/css">
+            body {
+                margin: 0;
+            }
+            #container {
+                width: 100%;
+                height: 100%;
+            }
+            canvas {
+                margin: auto;
+            }
+        </style>
+    </head>
+    <body>
+
+        <div>
+            <script type="text/javascript">
+                var ACTIONS = {LEFT: 1, UP: 2, RIGHT: 3, ATTACK: 4};
+
+                var weight = 1280;
+                var height = 700;
+                var game = new Phaser.Game(weight, height, Phaser.AUTO, '', {preload: preload, create: create, update: update});
+
+                function preload() {
+                    game.load.image('karda', 'vue/images/perso/karda.png');
+                    game.load.image('background', 'vue/images/background.png');
+                    game.load.image('blockStandard', 'vue/images/block.png');
+                    game.load.image('plateforme1', 'vue/images/plateforme1.png');
+                    game.load.image('plateforme2', 'vue/images/plateforme2.png');
+                    game.load.image('plateforme3', 'vue/images/plateforme3.png');
+                    game.load.image('plateforme4', 'vue/images/plateforme4.png');
+                    game.load.image('flower', 'vue/images/ammo/flower.png');
+                    game.load.image('flower_explosion', 'vue/images/ammo/flower_explosion.png');
+                    game.load.image('health', 'vue/images/health.png');
+                    game.load.image('ammo', 'vue/images/ammo/ammo.png');
+                    game.load.image('twittos', 'vue/images/ammo/twittos.png');
+                    game.load.image('twittos_explosion', 'vue/images/ammo/twittos_explosion.png');
+                    game.load.image('kiss', 'vue/images/ammo/kiss.png');
+                    game.load.image('kiss_explosion', 'vue/images/ammo/kiss_explosion.png');
+                    game.load.image('bonus', 'vue/images/ammo/bonus.png');
+                    game.load.spritesheet('trump', 'vue/images/perso/trump.png', 70, 70);
+                    game.load.spritesheet('kim', 'vue/images/perso/kim.png', 70, 70);
+                }
+
+                var players = [];
+                var controls = [];
+                var healths = [];
+                var ammos = [];
+                var weapons = [];
+                var facings = [];
+                var bullets = [];
+                var playerHealthMeters = [];
+                var weaponAmmoMeters = [];
+                var weaponMeters = [];
+
+                var karda;
+                var weapon;
+                var stateText;
+                var platforms;
+                var bullets;
+                var bonus = [];
+
+                var stars;
+
+                function create() {
+                    //  We're going to be using physics, so enable the Arcade Physics system
+                    game.physics.startSystem(Phaser.Physics.ARCADE);
+                    //  A simple background for our game
+                    game.add.sprite(0, 0, 'background');
+                    stateText = game.add.text(game.world.centerX, game.world.centerY, ' ', {font: '84px Arial', fill: '#000'});
+                    stateText.anchor.setTo(0.5, 0.5);
+                    stateText.visible = false;
+
+                    platforms = game.add.group();
+                    platforms.enableBody = true;
+                    createBorders(game, platforms);
+
+                    var ledge = platforms.create(298, 154, 'plateforme1');
+                    ledge.body.immovable = true;
+                    var ledge = platforms.create(50, 321, 'plateforme2');
+                    ledge.body.immovable = true;
+                    var ledge = platforms.create(142, 557, 'plateforme1');
+                    ledge.body.immovable = true;
+                    var ledge = platforms.create(356, 413, 'plateforme2');
+                    ledge.body.immovable = true;
+                    var ledge = platforms.create(834, 269, 'plateforme1');
+                    ledge.body.immovable = true;
+                    var ledge = platforms.create(495, 578, 'plateforme2');
+                    ledge.body.immovable = true;
+                    var ledge = platforms.create(600, 450, 'plateforme1');
+                    ledge.body.immovable = true;
+                    var ledge = platforms.create(990, 558, 'plateforme2');
+                    ledge.body.immovable = true;
+
+                    bonus = game.add.group();
+                    bonus.enableBody = true;
+
+                    initGame();
+                    /*
+                     //  Finally some stars to collect
+                     stars = game.add.group();
+                     
+                     //  We will enable physics for any star that is created in this group
+                     stars.enableBody = true;
+                     
+                     //  Here we'll create 12 of them evenly spaced apart
+                     for (var i = 0; i < 12; i++) {
+                     //  Create a star inside of the 'stars' group
+                     var star = stars.create(i * 70, 0, 'star');
+                     
+                     //  Let gravity do its thing
+                     star.body.gravity.y = 300;
+                     
+                     //  This just gives each star a slightly random bounce value
+                     star.body.bounce.y = 0.7 + Math.random() * 0.2;
+                     }
+                     */
+                }
+
+                function update() {
+                    for (let i = 0; i < 2; i++) {
+                        let player = players[i];
+                        let control = controls[i];
+                        let weapon = weapons[i];
+
+                        game.physics.arcade.collide(player, platforms);
+                        facings[i] = movePlayer(player, control, facings[i], i);
+                        if (control.isDown(ACTIONS.ATTACK)) {
+                            setDirection(weapon, facings[i]);
+                            var bullet = weapon.fire();
+                            if (bullet !== null) {
+                                bullet.lifespan = 3000;
+                                weapon.health -= 1;
+                                bullets[i].push(bullet);
+                                if (weapon.health === 0) {
+                                    weapons[i] = twittos(game, i);
+                                }
+                            }
+                        }
+                    }
+
+                    game.physics.arcade.collide(bonus, platforms);
+                    game.physics.arcade.collide(bullets[0], platforms);
+                    game.physics.arcade.collide(bullets[1], platforms);
+
+                    game.physics.arcade.overlap(players[0], bonus, takeBonus, null, {this: this, nb_player: 0});
+                    game.physics.arcade.overlap(players[1], bonus, takeBonus, null, {this: this, nb_player: 1});
+
+                    game.physics.arcade.overlap(players[0], bullets[1], getHit, null, {this: this, nb_player: 0});
+                    game.physics.arcade.overlap(players[1], bullets[0], getHit, null, {this: this, nb_player: 1});
+                    if (checkIfFinished()) {
+                        game.world.bringToTop(stateText);
+                        stateText.visible = true;
+                        karda = game.add.sprite(game.world.centerX, 150, 'karda');
+                        karda.anchor.setTo(1, 0.5);
+                        game.input.onTap.addOnce(initGame, this);
+                    }
+
+                    var random = game.rnd.integerInRange(1, 600);
+                    if (random === 200) {
+                        var caisse = bonus.create(game.world.randomX, game.world.randomY, 'bonus');
+                        caisse.body.gravity.y = 300;
+                        caisse.body.bounce.y = 0.7 + Math.random() * 0.2;
+                        caisse.lifespan = 20000;
+                    }
+                }
+
+                function takeBonus(player, bonus) {
+                    if (weapons[this.nb_player].bulletKey === "twittos") {
+                        bonus.kill();
+                        var random = game.rnd.integerInRange(1, 5);
+                        if (random === 1) {
+                            weapons[this.nb_player] = kiss(game, this.nb_player);
+                        } else {
+                            weapons[this.nb_player] = flower(game, this.nb_player);
+                        }
+                    }
+                }
+
+                function checkIfFinished() {
+                    if (players[0].health <= 0) {
+                        stateText.text = "God bless America !\n    Click to restart";
+                        players[0].kill();
+                        players[1].kill();
+                        return true;
+                    } else if (players[1].health <= 0) {
+                        stateText.text = "I am THE Rocket Man !\n       Click to restart";
+                        players[0].kill();
+                        players[1].kill();
+                        return true;
+                    }
+                    return false;
+                }
+
+                function initGame() {
+                    if (karda !== undefined) {
+                        karda.kill();
+                        karda.destroy();
+                    }
+                    bonus.removeAll();
+                    stateText.visible = false;
+                    // Init joueurs 
+                    players[0] = createPlayer(game, 'kim', 32);
+                    players[1] = createPlayer(game, 'trump', game.world.width - 112);
+                    // Init controls
+                    controls[0] = bindKeys(game, ACTIONS, 0);
+                    controls[1] = bindKeys(game, ACTIONS, 1);
+                    // Init weapons
+                    weapons[0] = twittos(game, 0);
+                    weapons[1] = twittos(game, 1);
+
+                    bullets[0] = [];
+                    bullets[1] = [];
+
+                    facings[0] = "right";
+                    facings[1] = "left";
+
+                    playerHealthMeters[0] = this.game.add.plugin(Phaser.Plugin.HealthMeter);
+                    playerHealthMeters[0].icons(
+                            players[0],
+                            {x: 140, y: 65, width: 36, height: 30, rows: 2, icon: 'health'}
+                    );
+                    playerHealthMeters[1] = this.game.add.plugin(Phaser.Plugin.HealthMeter);
+                    playerHealthMeters[1].icons(
+                            players[1],
+                            {x: game.world.width - 330, y: 65, width: 36, height: 30, rows: 2, icon: 'health'}
+                    );
+                }
+            </script>
+        </div>
+    </body>
+</html>
